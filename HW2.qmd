@@ -1,0 +1,279 @@
+---
+title: "EDS 223 Homework #2"
+subtitle: "Geospatial Analysis & Remote Sensing" 
+author: "Mark Oregel"
+date: 2026-10-24
+format: 
+    pdf: 
+        toc: true
+---
+
+### Importing Data and Packages 
+
+```{r}
+#| warning = FALSE
+library(tidyverse)
+library(sf)
+library(here)
+library(tmap)
+library(spData)
+library(viridisLite)
+library(gt)
+```
+ ```{r}
+ #| warning = FALSE
+ # Load EJSreen data
+ ejscreen <- sf::st_read(here::here("data", "ejscreen", "EJSCREEN_2023_BG_StatePct_with_AS_CNMI_GU_VI.gdb"))
+
+# Filter EJScreen to Los Angeles County  
+la <- ejscreen |> 
+    dplyr::filter(CNTY_NAME == "Los Angeles County")
+
+# Load HOLC Redlining data
+holc <- sf::st_read(here::here('data', 'mapping-inequality', 'mapping-inequality-los-angeles.json'))
+
+# Load bike and pedestrian crash reports 
+crashes <- read.csv('data/SWITRS_LA/Crashes.csv')
+
+
+
+ ```
+
+# Part 1: Legacy of Redlining in Current Environmental (In)Justice 
+
+```{r}
+# Transform la crs to holc crs 
+holc_trans <- st_transform(holc, crs = st_crs(la))
+
+# Message verification for matching CRS
+if(st_crs(holc_trans) == st_crs(la)){
+    print("It's a match! :)")
+}else{
+    warning("It's not a match :(")
+}
+```
+
+
+### Joining holc dataset to la_trans dataset
+```{r}
+# Combine transformed holc data to la county data
+combined <- st_join(holc_trans, la)
+
+```
+
+
+### Main Map: 
+```{r}
+# Create map for HOLC grade and census blocks 
+tm_shape(combined, bbox = holc_trans) + 
+    tm_polygons(
+        fill = 'grade',
+        fill.scale = tm_scale(values = rev(heat.colors(5))),
+        fill.legend = tm_legend(title = 'Grade')
+    ) + 
+tm_scalebar() + 
+tm_compass() + 
+tm_borders() + 
+tm_title('Grade by Census Block in Los Angeles County') + 
+tm_basemap()
+    
+```
+
+### Creating Table 
+```{r}
+# Drop geometries from combined 
+dropped_geom <- st_drop_geometry(combined)
+
+# Filter by grade and create percentage column 
+filtered <- dropped_geom |> 
+    group_by(grade) |> 
+    summarize(
+        percentage = n()/nrow(dropped_geom) * 100
+    )
+
+# Create table from filtered dataset
+filtered |> 
+    gt() |> 
+    tab_header(title = md('Percentage of Census Blocks per HOLC Grade'))
+```
+
+### Means & Visualizations 
+```{r}
+# Create objects for mean values 
+low_income <- dropped_geom |> 
+    group_by(grade) |> 
+    summarize(
+        mean_low_income = mean(P_LOWINCPCT, na.rm = TRUE)
+    )
+
+pm25 <- dropped_geom |> 
+    group_by(grade) |> 
+    summarize(
+        mean_pm25 = mean(P_PM25, na.rm = TRUE)
+    )
+
+low_life_exp <- dropped_geom |> 
+    group_by(grade) |> 
+    summarize(
+        mean_lle = mean(P_LIFEEXPPCT, na.rm = TRUE)
+    )
+
+```
+
+### Visualizing Mean Low Income by Grade 
+```{r}
+# Plot for mean low income by grade 
+ggplot(
+    data = low_income,
+    mapping = aes(
+        x = grade,
+        y = mean_low_income,
+        fill = grade
+    )
+) + 
+    geom_col(
+        color = 'black',
+        width = 0.6
+    ) + 
+        scale_fill_manual(
+            values = c(
+            'A' = 'seagreen',
+            'B' = 'yellow',
+            'C' = 'goldenrod',
+            'D' = 'firebrick2'
+            )
+        ) +
+        labs(
+            title = 'Mean Low Income Percentile by HOLC Grade',
+            x = 'HOLC Grade',
+            y = 'Mean Low Income Percentile'
+        )
+
+```
+
+### Visualizing Mean Life Expectancy by Grade 
+```{r}
+# Plot for mean low life expectancy percentile by grade 
+ggplot(
+    data = low_life_exp,
+    mapping = aes(
+        x = grade,
+        y = mean_lle,
+        fill = grade
+    )
+) + 
+    geom_col(
+        color = 'black',
+        width = 0.6
+    ) + 
+    scale_fill_manual(
+                values = c(
+            'A' = 'seagreen',
+            'B' = 'yellow',
+            'C' = 'goldenrod',
+            'D' = 'firebrick2'
+                )) +
+    labs(
+        title = 'Mean Low Life Expectancy Perentile by HOLC Grade',
+        x = 'HOLC Grade',
+        y = 'Mean Low Life Expectancy Percentile'
+    )
+
+```
+
+### Visualizing Mean PM 2.5 by Grade
+```{r}
+# Plot for mean pm 2.5 percentile by grade 
+ggplot(
+    data = pm25,
+    mapping = aes(
+        x = grade,
+        y = mean_pm25,
+        fill = grade
+    )
+) + 
+    geom_col(
+        color = 'black',
+        width = 0.6
+    ) + 
+    scale_fill_manual(
+        values = c(
+            'A' = 'seagreen',
+            'B' = 'yellow',
+            'C' = 'goldenrod',
+            'D' = 'firebrick2')
+    ) + 
+        labs(
+            title = 'Mean PM 2.5 Percentile by HOLC Grade',
+            x = 'HOLC Grade',
+            y = 'Mean PM2.5 Percentile (micrograms/m^3)'
+        )
+
+```
+
+### Discussion 
+
+Based on the map of redlining in Los Angeles county, the data would suggest that there is a clear relationship between historical redlining and percentage of disadvatanged communities living in areas deemed hazardous (grade D). The visualizations produced displaying the mean variables of interest compared to the concentrations of grading would suggest that higher percentiles of disadvantaged peoples are concentrated in areas that are deemed hazardous. Areas that have the lowest percentage of disadvantaged peoples are deemed the most safest (grade A). 
+
+# Part 2: Legacy of redlining in pedestrian and bike accidents 
+
+### Filtering and Transforming Crashes Dataset 
+```{r}
+# only ped and bike accidents
+filter <- crashes |>
+  filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y") |> 
+  filter(POINT_X != 'NA')
+
+sf_crash <- st_as_sf(filter, coords = c("POINT_X", "POINT_Y"), crs = 4326)
+
+# Transform crash dots to HOLC map CRS
+sf_crash <- st_transform(sf_crash, crs = st_crs(combined))
+if(st_crs(sf_crash) != st_crs(combined)) stop('Please ensure CRS is matching!')
+
+# Subset points only within HOLC regions
+HOLC_regions <- sf_crash[combined, ]
+
+join <- st_join(HOLC_regions, combined) |> 
+  select(id = ID, region = grade)
+
+# Summarise HOLC grades with most crashes
+most_crashes <- join |> 
+  filter(!is.na(region)) |> 
+  group_by(region) |> 
+  summarise(n_points = n()) |> 
+  st_drop_geometry()
+
+percent <- most_crashes |> 
+  mutate(Percentage = 100*(n_points/sum(most_crashes$n_points)))
+percent$region <- as.factor(percent$region)
+percent$Percentage <- as.double(percent$Percentage)
+
+percent
+```
+
+### Visualizing Bike and Pedestrian Crashes 
+```{r}
+# graph percentage bike and pedestrian crashes
+ggplot(percent, 
+aes(
+    x = region, 
+    y = Percentage, 
+    fill = region)
+    ) +
+  geom_col(
+    color = 'black'
+  ) +
+  scale_fill_manual(
+    values = c(
+            'A' = 'seagreen',
+            'B' = 'yellow',
+            'C' = 'goldenrod',
+            'D' = 'firebrick2'
+            )
+    ) +
+  labs(x = 'HOLC Grade',
+         y = '% Bike and Pedestrian Crashes', 
+         title = 'Bike and Pedestrian Crash Percentage by Grade in LA County')
+
+```
+
