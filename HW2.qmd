@@ -58,7 +58,7 @@ if(st_crs(holc_trans) == st_crs(la)){
 ### Joining holc dataset to la_trans dataset
 ```{r}
 # Combine transformed holc data to la county data
-combined <- st_join(holc_trans, la)
+combined <- st_join(la, holc_trans)
 
 ```
 
@@ -66,7 +66,8 @@ combined <- st_join(holc_trans, la)
 ### Main Map: 
 ```{r}
 # Create map for HOLC grade and census blocks 
-tm_shape(combined, bbox = holc_trans) + 
+tm_basemap('OpenStreetMap') + 
+tm_shape(holc_trans, bbox = holc_trans) + 
     tm_polygons(
         fill = 'grade',
         fill.scale = tm_scale(values = rev(heat.colors(5))),
@@ -75,9 +76,7 @@ tm_shape(combined, bbox = holc_trans) +
 tm_scalebar() + 
 tm_compass() + 
 tm_borders() + 
-tm_title('Grade by Census Block in Los Angeles County') + 
-tm_basemap()
-    
+tm_title('Grade by Census Block in Los Angeles County')    
 ```
 
 ### Creating Table 
@@ -87,9 +86,9 @@ dropped_geom <- st_drop_geometry(combined)
 
 # Filter by grade and create percentage column 
 filtered <- dropped_geom |> 
-    group_by(grade) |> 
-    summarize(
-        percentage = n()/nrow(dropped_geom) * 100
+    count(grade) |> 
+    mutate(
+        Percent = round(n / sum(n) * 100,2)
     )
 
 # Create table from filtered dataset

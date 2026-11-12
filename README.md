@@ -34,4 +34,3 @@ U.S. Environmental Protection Agency (EPA), 2023. EJScreen Technical Documentati
 Robert K. Nelson, LaDale Winling, Richard Marciano, Nathan Connolly, et al., “Mapping Inequality,” American Panorama, ed. Robert K. Nelson and Edward L. Ayers, accessed October 17, 2023, [Mapping Inequality](https://tims.berkeley.edu/)
 
 Transportation Injury Mapping System (TIMS). (2026). Safe Transportation Research and Education Center, University of California, Berkeley, https://tims.berkeley.edu/about.php.
-
